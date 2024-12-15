@@ -1,0 +1,16 @@
+# Node modules
+node_modules/
+
+# .env file (for sensitive information like API keys)
+.env
+
+# Logs
+*.log
+
+# npm package lock file (if necessary, e.g., for yarn projects)
+package-lock.json
+yarn.lock
+
+# Optional directories or files to ignore
+tmp/
+coverage/
