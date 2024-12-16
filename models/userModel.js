@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema({
     required: true,
     minLength: [8, "Password must be at least 8 characters"],
   },
+  status: {
+    type: String,
+    default: 'unverified',
+  },
   token: String,
   otp:String,
   otpExpires:Date,

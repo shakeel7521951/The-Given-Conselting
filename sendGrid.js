@@ -4,10 +4,10 @@ import sgMail from "@sendgrid/mail";
 dotenv.config();
 sgMail.setApiKey(process.env.SEND_GRID_API_KEY);
 
-export const sendMail = async (to, subject, text) => {
+export const sendMail = async (email, subject, text) => {
   try {
     const msg = {
-      to,
+      to:email,
       from: "aqibmalik1586@gmail.com",
       subject,
       html: text,

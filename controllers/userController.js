@@ -7,24 +7,24 @@ import { sendMail } from "../sendGrid.js";
 
 export const signup = catchAsyncError(async (req, res, next) => {
   const { name, email, password, role } = req.body;
-  const file = req.files.profilePic;
+  const file = req.files?.profilePic;
+
+  if (!name || !email || !password) {
+    return next(new errorHandler("All fields are required", 400));
+  }
 
   if (!file) {
     return next(new errorHandler("Image file is required", 400));
-  }
-
-  const result = await cloudinary.uploader.upload(file.tempFilePath, {
-    folder: "User Profiles",
-  });
-
-  if (!email) {
-    return next(new errorHandler("Invalid email detail", 400));
   }
 
   const findUser = await User.findOne({ email });
   if (findUser) {
     return next(new errorHandler("User already exists", 400));
   }
+
+  const result = await cloudinary.uploader.upload(file.tempFilePath, {
+    folder: "User Profiles",
+  });
 
   const newUser = new User({
     name,
@@ -37,13 +37,65 @@ export const signup = catchAsyncError(async (req, res, next) => {
     },
   });
 
+  const OTP = newUser.generateOTP();
   await newUser.save();
+
+  const subject = "Welcome to our website";
+  const text = `
+    <p>Hello <h5>${name}</h5></p>
+
+    <p>Thank you for joining us at The Given Consulting! We're excited to have you on board.</p>
+    <p>To complete your registration, please use the OTP below for verification:</p>
+
+    <p>OTP:</p> <h3 style="font-size: 32px; font-weight: bold; color: #4CAF50;">${OTP}</h3>
+
+   <p>If you need assistance, feel free to reach out to us.</p>
+
+    <p>Best regards,</p>
+    <p>The Given Consulting Team</p>
+  `;
+
+  await sendMail(email, subject, text);
 
   res.status(201).json({
     success: true,
-    message: "User registered successfully",
+    message: `Email verification OTP sent to: ${email}`,
     newUser,
   });
+});
+
+export const verifyUser = catchAsyncError(async (req, res, next) => {
+  const { email, otp } = req.body;
+
+  if (!otp) {
+    return next(new errorHandler("Please enter your OTP", 400));
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return next(new errorHandler("User with this email not found", 404));
+  }
+
+  if (user.otp !== otp || Date.now() > user.otpExpires) {
+    return next(new errorHandler("Invalid or Expired OTP", 400));
+  }
+
+  const token = user.getJwtToken();
+  user.otp = undefined;
+  user.otpExpires = undefined;
+  user.status = "verified";
+  await user.save();
+
+  res
+    .status(200)
+    .cookie("token", token, {
+      expires: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+      httpOnly: true,
+    })
+    .json({
+      success: true,
+      message: "Welcome to The Given Consulting Website",
+    });
 });
 
 export const login = catchAsyncError(async (req, res, next) => {
@@ -60,6 +112,10 @@ export const login = catchAsyncError(async (req, res, next) => {
   }
 
   const token = user.getJwtToken();
+
+  if(user.status === 'unverified'){
+    await User.findOneAndDelete({email});
+  }
 
   res
     .status(200)
@@ -196,7 +252,7 @@ export const forgotPassword = catchAsyncError(async (req, res, next) => {
 
   try {
     await sendMail(email, "Password Reset OTP", message);
-    user.otp = OTP; 
+    user.otp = OTP;
     await user.save();
 
     res.status(200).json({
@@ -246,4 +302,45 @@ export const resetPassword = catchAsyncError(async (req, res, next) => {
   res
     .status(200)
     .json({ success: true, message: "Password reset successfully" });
+});
+
+export const getSingleUser = catchAsyncError(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next(new errorHandler("User not found!", 404));
+  }
+  res.status(200).json({
+    success: true,
+    user,
+  });
+});
+
+export const getAllUsers = catchAsyncError(async (req, res, next) => {
+  const users = await User.find();
+
+  if (users.length < 1) {
+    return res.status(200).json({
+      success: true,
+      message: 'No users found',
+      users: [],
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    count: users.length,
+    users,
+  });
+});
+
+export const deleteUser = catchAsyncError(async (req, res, next) => {
+  const deleteUser = await User.findByIdAndDelete(req.params.id);
+  if (!deleteUser) {
+    return next(new errorHandler("Error in deleting User!", 401));
+  }
+  await cloudinary.uploader.destroy(deleteUser.profilePic.public_id);
+  res.status(200).json({
+    success: true,
+    message: "User deleted successfully",
+  });
 });
