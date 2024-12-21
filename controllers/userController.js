@@ -6,55 +6,42 @@ import bcrypt from "bcrypt";
 import { sendMail } from "../sendGrid.js";
 
 export const signup = catchAsyncError(async (req, res, next) => {
-  const { name, email, password, role } = req.body;
-  const file = req.files?.profilePic;
+  const { name, email, password, confirmPassword } = req.body;
 
-  if (!name || !email || !password) {
+  // Validate that all fields are provided
+  if (!name || !email || !password || !confirmPassword) {
     return next(new errorHandler("All fields are required", 400));
   }
 
-  if (!file) {
-    return next(new errorHandler("Image file is required", 400));
+  if (password !== confirmPassword) {
+    return next(new errorHandler("Passwords do not match", 422));
   }
-
-  const findUser = await User.findOne({ email });
-  if (findUser) {
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
     return next(new errorHandler("User already exists", 400));
   }
-
-  const result = await cloudinary.uploader.upload(file.tempFilePath, {
-    folder: "User Profiles",
-  });
 
   const newUser = new User({
     name,
     email,
     password,
-    role: role || "user",
-    profilePic: {
-      public_id: result.public_id,
-      url: result.secure_url,
-    },
   });
 
   const OTP = newUser.generateOTP();
-  await newUser.save();
+  await newUser.save(); 
 
-  const subject = "Welcome to our website";
+  const subject = "Welcome to The Given Consulting!";
   const text = `
-    <p>Hello <h5>${name}</h5></p>
-
+    <p>Hello <strong>${name}</strong>,</p>
     <p>Thank you for joining us at The Given Consulting! We're excited to have you on board.</p>
     <p>To complete your registration, please use the OTP below for verification:</p>
-
-    <p>OTP:</p> <h3 style="font-size: 32px; font-weight: bold; color: #4CAF50;">${OTP}</h3>
-
-   <p>If you need assistance, feel free to reach out to us.</p>
-
+    <h3 style="font-size: 32px; font-weight: bold; color: #4CAF50;">${OTP}</h3>
+    <p>If you need assistance, feel free to reach out to us.</p>
     <p>Best regards,</p>
     <p>The Given Consulting Team</p>
   `;
 
+  // Send the OTP via email
   await sendMail(email, subject, text);
 
   res.status(201).json({
@@ -113,8 +100,8 @@ export const login = catchAsyncError(async (req, res, next) => {
 
   const token = user.getJwtToken();
 
-  if(user.status === 'unverified'){
-    await User.findOneAndDelete({email});
+  if (user.status === "unverified") {
+    await User.findOneAndDelete({ email });
   }
 
   res
@@ -133,25 +120,22 @@ export const login = catchAsyncError(async (req, res, next) => {
 export const logout = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
   if (!userId) {
-    return res.status(400).json({ success: false, message: "User not found" });
-  }
-
-  const user = await User.findById(userId);
-  if (!user) {
-    return res
-      .status(404)
-      .json({ success: false, message: "User does not exist" });
+    return res.status(400).json({
+      success: false,
+      message: "User not found",
+    });
   }
   res.cookie("token", null, {
     httpOnly: true,
     expires: new Date(Date.now()),
   });
-  user.token = undefined;
-  await user.save();
-  res
-    .status(200)
-    .json({ success: true, message: "User logged out successfully" });
+
+  res.status(200).json({
+    success: true,
+    message: "User logged out successfully",
+  });
 });
+
 
 export const myProfile = catchAsyncError(async (req, res, next) => {
   const user = req.user;
@@ -321,7 +305,7 @@ export const getAllUsers = catchAsyncError(async (req, res, next) => {
   if (users.length < 1) {
     return res.status(200).json({
       success: true,
-      message: 'No users found',
+      message: "No users found",
       users: [],
     });
   }
@@ -333,14 +317,14 @@ export const getAllUsers = catchAsyncError(async (req, res, next) => {
   });
 });
 
-export const deleteUser = catchAsyncError(async (req, res, next) => {
-  const deleteUser = await User.findByIdAndDelete(req.params.id);
-  if (!deleteUser) {
+export const deleteMyProfile = catchAsyncError(async (req, res, next) => {
+  const deleteProfile = await User.findByIdAndDelete(req.user._id);
+  if (!deleteProfile) {
     return next(new errorHandler("Error in deleting User!", 401));
   }
-  await cloudinary.uploader.destroy(deleteUser.profilePic.public_id);
+  // await cloudinary.uploader.destroy(deleteProfile.profilePic.public_id);
   res.status(200).json({
     success: true,
-    message: "User deleted successfully",
+    message: "Profile deleted successfully",
   });
 });

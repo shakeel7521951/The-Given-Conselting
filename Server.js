@@ -6,6 +6,7 @@ import userRoute from "./routes/userRoute.js";
 import { v2  } from "cloudinary";
 import fileUpload from "express-fileupload";
 import cors from 'cors';
+import error from './middlewhare/error.js'
 
 dotenv.config();
 
@@ -35,6 +36,8 @@ v2.config({
 });
 
 app.use("/api/v1", userRoute);
+
+app.use(error)
 
 app.listen(port, async () => {
   console.log(`The server is running on port ${port}.`);

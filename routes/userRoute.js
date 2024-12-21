@@ -1,5 +1,5 @@
 import {
-  deleteUser,
+  deleteMyProfile,
   forgotPassword,
   getAllUsers,
   getSingleUser,
@@ -29,6 +29,6 @@ router.put("/verify-otp", verifyOTP);
 router.put("/reset-password", resetPassword);
 router.get("/get-single-user/:id", isUserLogedIn, getSingleUser);
 router.get("/get-all-users", isUserLogedIn, getAllUsers);
-router.delete("/delete-user/:id", isUserLogedIn, deleteUser);
+router.delete("/delete-my-profile", isUserLogedIn, deleteMyProfile);
 
 export default router;
