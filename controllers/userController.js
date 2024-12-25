@@ -28,7 +28,7 @@ export const signup = catchAsyncError(async (req, res, next) => {
   });
 
   const OTP = newUser.generateOTP();
-  await newUser.save(); 
+  await newUser.save();
 
   const subject = "Welcome to The Given Consulting!";
   const text = `
@@ -136,7 +136,6 @@ export const logout = catchAsyncError(async (req, res, next) => {
   });
 });
 
-
 export const myProfile = catchAsyncError(async (req, res, next) => {
   const user = req.user;
 
@@ -237,6 +236,7 @@ export const forgotPassword = catchAsyncError(async (req, res, next) => {
   try {
     await sendMail(email, "Password Reset OTP", message);
     user.otp = OTP;
+    user.otpExpires = Date.now() + 10 * 60 * 1000; // OTP valid for 10 minutes
     await user.save();
 
     res.status(200).json({
@@ -254,38 +254,65 @@ export const forgotPassword = catchAsyncError(async (req, res, next) => {
 
 export const verifyOTP = catchAsyncError(async (req, res, next) => {
   const { email, otp } = req.body;
+
   if (!email || !otp) {
-    return next(new errorHandler("Email and otp is required", 401));
+    return next(new errorHandler("Email and OTP are required", 401));
   }
+
   const user = await User.findOne({ email });
   if (!user) {
     return next(new errorHandler("User with this email not found!", 404));
   }
+
   if (user.otp !== otp || user.otpExpires < Date.now()) {
     return next(new errorHandler("Invalid or expired OTP", 400));
   }
+
+  // Clear OTP-related fields after successful verification
   user.otp = undefined;
   user.otpExpires = undefined;
+
+  // Optionally set a flag to indicate OTP verification success
+  user.status = "verified";
+
   await user.save();
-  res
-    .status(200)
-    .json({ success: true, message: "OTP verified successfully!" });
+
+  res.status(200).json({
+    success: true,
+    message: "OTP verified successfully!",
+  });
 });
 
 export const resetPassword = catchAsyncError(async (req, res, next) => {
   const { email, newPassword } = req.body;
+
   if (!email || !newPassword) {
-    return next(new errorHandler("Email and password is required!", 401));
+    return next(new errorHandler("Email and password are required!", 401));
   }
+
   const user = await User.findOne({ email });
   if (!user) {
     return next(new errorHandler("User with this email not found!", 404));
   }
+
+  if (user.otp || user.status !== "verified") {
+    return next(
+      new errorHandler(
+        "OTP verification is required before resetting password",
+        400
+      )
+    );
+  }
+
   user.password = newPassword;
+  user.status = "unverified";
+
   await user.save();
-  res
-    .status(200)
-    .json({ success: true, message: "Password reset successfully" });
+
+  res.status(200).json({
+    success: true,
+    message: "Password reset successfully!",
+  });
 });
 
 export const getSingleUser = catchAsyncError(async (req, res, next) => {
